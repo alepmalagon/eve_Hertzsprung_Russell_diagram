@@ -35,39 +35,82 @@ class StellarDataProcessor:
     def _clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """Clean and validate stellar data"""
         initial_count = len(df)
+        logger.info(f"🔍 Starting data cleaning with {initial_count} stars")
         
         # Remove rows with missing critical data
         critical_columns = ['luminosity', 'temperature', 'spectral_class']
         for col in critical_columns:
             if col in df.columns:
+                before_count = len(df)
                 df = df.dropna(subset=[col])
+                after_count = len(df)
+                if before_count != after_count:
+                    logger.info(f"   Removed {before_count - after_count} stars missing {col}")
                 
         # Remove invalid values
         if 'luminosity' in df.columns:
+            before_count = len(df)
             df = df[df['luminosity'] > 0]  # Luminosity must be positive
+            after_count = len(df)
+            if before_count != after_count:
+                logger.info(f"   Removed {before_count - after_count} stars with non-positive luminosity")
             
         if 'temperature' in df.columns:
+            before_count = len(df)
             df = df[df['temperature'] > 0]  # Temperature must be positive
+            after_count = len(df)
+            if before_count != after_count:
+                logger.info(f"   Removed {before_count - after_count} stars with non-positive temperature")
+                
+            before_count = len(df)
             df = df[df['temperature'] < 100000]  # Reasonable upper limit
+            after_count = len(df)
+            if before_count != after_count:
+                logger.info(f"   Removed {before_count - after_count} stars with temperature > 100,000K")
             
         if 'radius' in df.columns:
+            before_count = len(df)
             df = df[df['radius'] > 0]  # Radius must be positive
+            after_count = len(df)
+            if before_count != after_count:
+                logger.info(f"   Removed {before_count - after_count} stars with non-positive radius")
             
         if 'age' in df.columns:
+            before_count = len(df)
             df = df[df['age'] >= 0]  # Age must be non-negative
+            after_count = len(df)
+            if before_count != after_count:
+                logger.info(f"   Removed {before_count - after_count} stars with negative age")
             
-        # Remove extreme outliers (beyond 3 standard deviations)
-        for col in ['luminosity', 'temperature']:
-            if col in df.columns:
-                mean_val = df[col].mean()
-                std_val = df[col].std()
-                df = df[np.abs(df[col] - mean_val) <= 3 * std_val]
+        # REMOVED: Overly aggressive 3-sigma outlier removal
+        # This was incorrectly removing legitimate stellar data like supergiants and red dwarfs
+        # Stellar luminosity and temperature naturally span many orders of magnitude
+        
+        # Instead, only remove truly extreme/impossible values
+        if 'luminosity' in df.columns:
+            before_count = len(df)
+            # Remove stars with luminosity > 10^6 solar luminosities (extremely rare hypergiants)
+            df = df[df['luminosity'] <= 1000000]
+            # Remove stars with luminosity < 10^-6 solar luminosities (below brown dwarf limit)
+            df = df[df['luminosity'] >= 0.000001]
+            after_count = len(df)
+            if before_count != after_count:
+                logger.info(f"   Removed {before_count - after_count} stars with extreme luminosity values")
+                
+        if 'temperature' in df.columns:
+            before_count = len(df)
+            # Remove stars with temperature < 500K (too cold for any star)
+            df = df[df['temperature'] >= 500]
+            # Temperature upper limit already applied above (100,000K)
+            after_count = len(df)
+            if before_count != after_count:
+                logger.info(f"   Removed {before_count - after_count} stars with temperature < 500K")
                 
         cleaned_count = len(df)
         removed_count = initial_count - cleaned_count
         
-        logger.info(f"Removed {removed_count} invalid records ({removed_count/initial_count*100:.1f}%)")
-        logger.info(f"Remaining records: {cleaned_count}")
+        logger.info(f"✅ Data cleaning complete: removed {removed_count} invalid records ({removed_count/initial_count*100:.1f}%)")
+        logger.info(f"📊 Remaining records: {cleaned_count}")
         
         return df
         
