@@ -19,7 +19,7 @@ from tqdm import tqdm
 from src.esi_client import ESIClient
 from src.data_processor import StellarDataProcessor
 from src.hr_diagram import HRDiagramGenerator
-from src.config import get_config
+from src.config import get_config, STRATEGIC_SYSTEMS
 
 # Set up logging
 logging.basicConfig(
@@ -103,6 +103,34 @@ async def collect_stellar_data(use_cache: bool = True, cache_file: str = "data/s
     return stellar_data
 
 
+async def collect_strategic_systems_data() -> List[Dict]:
+    """Collect stellar data for strategic systems"""
+    
+    print("🎯 Fetching strategic systems data...")
+    start_time = time.time()
+    
+    async with ESIClient() as client:
+        strategic_data = await client.get_strategic_systems_data(STRATEGIC_SYSTEMS)
+        
+        if not strategic_data:
+            print("⚠️  No strategic systems data retrieved!")
+            return []
+            
+        elapsed_time = time.time() - start_time
+        print(f"✅ Successfully retrieved data for {len(strategic_data)} strategic systems in {elapsed_time:.1f}s")
+        
+        # Display which systems were found
+        found_systems = [star.get('strategic_system_name', 'Unknown') for star in strategic_data if star.get('strategic_system_name')]
+        if found_systems:
+            print(f"📍 Strategic systems found: {', '.join(found_systems)}")
+        
+        missing_systems = set(STRATEGIC_SYSTEMS) - set(found_systems)
+        if missing_systems:
+            print(f"⚠️  Strategic systems not found: {', '.join(missing_systems)}")
+    
+    return strategic_data
+
+
 def process_and_analyze_data(stellar_data: List[Dict]) -> Dict:
     """Process stellar data and generate analysis"""
     
@@ -148,7 +176,7 @@ def process_and_analyze_data(stellar_data: List[Dict]) -> Dict:
     }
 
 
-def generate_visualizations(processed_data: Dict, output_dir: str = "output") -> Dict[str, str]:
+def generate_visualizations(processed_data: Dict, famous_systems: Dict = None, output_dir: str = "output") -> Dict[str, str]:
     """Generate H-R diagram and additional visualizations"""
     
     print("🎨 Generating visualizations...")
@@ -165,7 +193,7 @@ def generate_visualizations(processed_data: Dict, output_dir: str = "output") ->
     # Create visualizations with progress tracking
     with tqdm(total=5, desc="Creating plots") as pbar:
         pbar.set_description("📈 Creating H-R diagram")
-        hr_diagram_path = generator.create_hr_diagram(hr_data)
+        hr_diagram_path = generator.create_hr_diagram(hr_data, famous_systems=famous_systems)
         pbar.update(1)
         
         pbar.set_description("📊 Creating analysis plots")
@@ -179,6 +207,10 @@ def generate_visualizations(processed_data: Dict, output_dir: str = "output") ->
     }
     
     print(f"✅ Generated {len(output_files)} visualization files")
+    if famous_systems:
+        successful_systems = sum(1 for v in famous_systems.values() if v is not None)
+        if successful_systems > 0:
+            print(f"🌟 Highlighted {successful_systems} famous systems on the H-R diagram")
     
     return output_files
 
@@ -284,6 +316,18 @@ async def main():
         
         print()
         
+        # Step 1.5: Collect strategic systems data
+        print("🎯 STEP 1.5: Collecting Strategic Systems Data")
+        print("-" * 40)
+        strategic_data = await collect_strategic_systems_data()
+        
+        # Merge strategic systems data with main stellar data
+        if strategic_data:
+            print(f"🔗 Merging {len(strategic_data)} strategic systems with main dataset")
+            stellar_data.extend(strategic_data)
+        
+        print()
+        
         # Step 2: Process and analyze data
         print("🔬 STEP 2: Processing and Analyzing Data")
         print("-" * 40)
@@ -295,10 +339,10 @@ async def main():
         
         print()
         
-        # Step 3: Generate visualizations
-        print("🎨 STEP 3: Generating Visualizations")
+        # Step 4: Generate visualizations
+        print("🎨 STEP 4: Generating Visualizations")
         print("-" * 40)
-        output_files = generate_visualizations(processed_data, args.output_dir)
+        output_files = generate_visualizations(processed_data, famous_systems, args.output_dir)
         
         if not output_files:
             print("❌ Visualization generation failed. Exiting.")
@@ -306,8 +350,8 @@ async def main():
         
         print()
         
-        # Step 4: Save results
-        print("💾 STEP 4: Saving Results")
+        # Step 5: Save results
+        print("💾 STEP 5: Saving Results")
         print("-" * 40)
         with tqdm(desc="Saving results", total=2) as pbar:
             save_results(processed_data, output_files, args.output_dir)

@@ -185,3 +185,113 @@ class ESIClient:
         
         logger.info(f"Successfully fetched data for {len(stellar_data)} stars")
         return stellar_data
+        
+    async def resolve_names_to_ids(self, names: List[str]) -> Dict[str, Any]:
+        """Resolve a list of names to their corresponding IDs"""
+        logger.info(f"Resolving {len(names)} names to IDs...")
+        
+        if not self.session:
+            raise RuntimeError("ESI client not initialized. Use async context manager.")
+            
+        url = f"{self.base_url}/{self.version}/universe/ids/"
+        
+        # Prepare the request body
+        request_data = names
+        
+        # Default parameters
+        request_params = {
+            "datasource": self.datasource,
+        }
+        
+        async with self.throttler:
+            try:
+                async with self.session.post(url, json=request_data, params=request_params) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        logger.info(f"Successfully resolved names to IDs")
+                        return result
+                    elif response.status == 400:
+                        logger.error("Bad request when resolving names")
+                        return {}
+                    elif response.status == 420:  # Error limited
+                        logger.error("ESI error limit reached during name resolution")
+                        await asyncio.sleep(60)  # Wait a minute before retrying
+                        return await self.resolve_names_to_ids(names)
+                    else:
+                        logger.error(f"Name resolution request failed: {response.status}")
+                        return {}
+                        
+            except asyncio.TimeoutError:
+                logger.error("Name resolution request timeout")
+                return {}
+            except Exception as e:
+                logger.error(f"Name resolution request error: {e}")
+                return {}
+                
+    async def get_strategic_systems_data(self, system_names: List[str]) -> List[Dict]:
+        """Get stellar data for strategic systems by name"""
+        logger.info(f"Fetching strategic systems data for: {', '.join(system_names)}")
+        
+        # Resolve system names to IDs
+        name_resolution = await self.resolve_names_to_ids(system_names)
+        
+        if not name_resolution or 'systems' not in name_resolution:
+            logger.warning("No systems found in name resolution")
+            return []
+            
+        resolved_systems = name_resolution['systems']
+        logger.info(f"Resolved {len(resolved_systems)} systems")
+        
+        # Get system info to extract star IDs
+        system_tasks = []
+        for system_info in resolved_systems:
+            system_tasks.append(self.get_system_info(system_info['id']))
+            
+        system_results = await tqdm.gather(*system_tasks, desc="🌍 Fetching strategic systems")
+        
+        # Extract star IDs and get stellar data
+        star_ids = []
+        system_star_mapping = {}  # Map star_id to system info
+        
+        for i, system_data in enumerate(system_results):
+            if system_data and 'star_id' in system_data:
+                star_id = system_data['star_id']
+                star_ids.append(star_id)
+                # Store mapping for later reference
+                system_star_mapping[star_id] = {
+                    'system_name': resolved_systems[i]['name'],
+                    'system_id': resolved_systems[i]['id'],
+                    'system_data': system_data
+                }
+                
+        if not star_ids:
+            logger.warning("No star IDs found for strategic systems")
+            return []
+            
+        # Get stellar data for these stars
+        stellar_data = await self.get_stellar_data(star_ids)
+        
+        # Enhance stellar data with system information
+        enhanced_stellar_data = []
+        for star_data in stellar_data:
+            if star_data and 'solar_system_id' in star_data:
+                # Find the corresponding system info
+                star_id = None
+                for sid, mapping in system_star_mapping.items():
+                    if mapping['system_id'] == star_data['solar_system_id']:
+                        star_id = sid
+                        break
+                        
+                if star_id and star_id in system_star_mapping:
+                    # Add system information to stellar data
+                    enhanced_data = star_data.copy()
+                    enhanced_data['strategic_system_name'] = system_star_mapping[star_id]['system_name']
+                    enhanced_data['is_strategic'] = True
+                    enhanced_stellar_data.append(enhanced_data)
+                else:
+                    enhanced_stellar_data.append(star_data)
+            else:
+                enhanced_stellar_data.append(star_data)
+                
+        logger.info(f"Successfully fetched data for {len(enhanced_stellar_data)} strategic systems")
+        return enhanced_stellar_data

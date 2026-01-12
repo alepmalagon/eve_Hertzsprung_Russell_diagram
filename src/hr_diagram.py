@@ -40,7 +40,7 @@ class HRDiagramGenerator:
             'Unknown': '#95a5a6'  # Gray
         }
         
-    def create_hr_diagram(self, df: pd.DataFrame, output_path: str = None) -> str:
+    def create_hr_diagram(self, df: pd.DataFrame, output_path: str = None, famous_systems: Dict = None) -> str:
         """Create a Hertzsprung-Russell diagram"""
         logger.info(f"Creating H-R diagram with {len(df)} stars...")
         
@@ -50,6 +50,10 @@ class HRDiagramGenerator:
         # Create the main scatter plot
         self._plot_main_sequence(ax, df)
         
+        # Add famous systems if provided
+        if famous_systems:
+            self._add_famous_systems(ax, famous_systems)
+        
         # Add stellar evolution tracks if we have enough data
         self._add_evolution_tracks(ax, df)
         
@@ -57,7 +61,7 @@ class HRDiagramGenerator:
         self._customize_plot(ax, df)
         
         # Add annotations and legends
-        self._add_annotations(ax, df)
+        self._add_annotations(ax, df, famous_systems)
         
         # Save the plot
         if output_path is None:
@@ -110,6 +114,94 @@ class HRDiagramGenerator:
                 linewidth=0.5
             )
             plt.colorbar(scatter, ax=ax, label='Temperature (K)')
+            
+    def _add_famous_systems(self, ax, famous_systems: Dict):
+        """Add famous EVE Online systems to the H-R diagram"""
+        
+        # Define system categories and their styling
+        system_categories = {
+            'Trade Hubs': {
+                'systems': ['Jita', 'Amarr', 'Rens', 'Hek', 'Dodixie'],
+                'color': '#FFD700',  # Gold
+                'marker': 's',       # Square
+                'size': 150,
+                'edge_color': '#B8860B'
+            },
+            'PvP Hotspots': {
+                'systems': ['Amamake', 'Auga', 'Tama'],
+                'color': '#FF4500',  # Red-Orange
+                'marker': '^',       # Triangle
+                'size': 120,
+                'edge_color': '#8B0000'
+            },
+            'Null-Sec Systems': {
+                'systems': ['R-6KYM', '1DQ1-A'],
+                'color': '#8A2BE2',  # Blue-Violet
+                'marker': 'D',       # Diamond
+                'size': 120,
+                'edge_color': '#4B0082'
+            },
+            'Other Notable': {
+                'systems': ['Vard', 'Ahbazon', 'Sosala'],
+                'color': '#00CED1',  # Dark Turquoise
+                'marker': 'o',       # Circle
+                'size': 100,
+                'edge_color': '#008B8B'
+            }
+        }
+        
+        plotted_systems = []
+        
+        for category, style in system_categories.items():
+            category_systems = []
+            
+            for system_name in style['systems']:
+                if system_name in famous_systems and famous_systems[system_name] is not None:
+                    system_data = famous_systems[system_name]
+                    stellar_data = system_data['stellar_data']
+                    
+                    if 'temperature' in stellar_data and 'luminosity' in stellar_data:
+                        temp = stellar_data['temperature']
+                        lum = stellar_data['luminosity']
+                        
+                        # Plot the system
+                        ax.scatter(temp, lum, 
+                                 c=style['color'], 
+                                 marker=style['marker'],
+                                 s=style['size'],
+                                 edgecolors=style['edge_color'],
+                                 linewidth=2,
+                                 alpha=0.9,
+                                 zorder=10)  # Ensure famous systems are on top
+                        
+                        # Add system name annotation
+                        ax.annotate(system_name, 
+                                   xy=(temp, lum),
+                                   xytext=(8, 8), 
+                                   textcoords='offset points',
+                                   fontsize=9,
+                                   fontweight='bold',
+                                   bbox=dict(boxstyle='round,pad=0.3', 
+                                           facecolor=style['color'], 
+                                           alpha=0.8,
+                                           edgecolor=style['edge_color']),
+                                   arrowprops=dict(arrowstyle='->', 
+                                                 connectionstyle='arc3,rad=0.1',
+                                                 color=style['edge_color']))
+                        
+                        category_systems.append(system_name)
+                        plotted_systems.append(system_name)
+            
+            # Add category to legend if we have systems in this category
+            if category_systems:
+                ax.scatter([], [], c=style['color'], marker=style['marker'], 
+                          s=style['size'], edgecolors=style['edge_color'], 
+                          linewidth=2, alpha=0.9, label=f"{category} ({len(category_systems)})")
+        
+        if plotted_systems:
+            logger.info(f"Added {len(plotted_systems)} famous systems to H-R diagram: {', '.join(plotted_systems)}")
+        else:
+            logger.warning("No famous systems could be plotted on the H-R diagram")
             
     def _add_evolution_tracks(self, ax, df: pd.DataFrame):
         """Add theoretical stellar evolution tracks"""
@@ -168,23 +260,111 @@ class HRDiagramGenerator:
         # Tick formatting
         ax.tick_params(labelsize=12)
         
-    def _add_annotations(self, ax, df: pd.DataFrame):
+    def _add_annotations(self, ax, df: pd.DataFrame, famous_systems: Dict = None):
         """Add annotations and legends to the plot"""
         
-        # Legend
+        # Legend - combine spectral types and famous systems
+        legend_elements = []
+        
+        # Add spectral type legend elements
         if 'spectral_type' in df.columns:
-            legend = ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', 
-                             fontsize=10, title='Spectral Type')
-            legend.get_title().set_fontsize(12)
+            for spec_type in df['spectral_type'].unique():
+                if pd.isna(spec_type):
+                    continue
+                count = len(df[df['spectral_type'] == spec_type])
+                color = self.spectral_colors.get(spec_type, '#95a5a6')
+                legend_elements.append(plt.Line2D([0], [0], marker='o', color='w', 
+                                                markerfacecolor=color, markersize=8,
+                                                label=f'{spec_type} ({count})', 
+                                                markeredgecolor='black', markeredgewidth=0.5))
+        
+        # Get existing legend elements from famous systems (if any)
+        existing_legend = ax.get_legend()
+        if existing_legend:
+            for handle in existing_legend.legendHandles:
+                if hasattr(handle, '_label') and any(cat in handle._label for cat in ['Trade Hubs', 'PvP Hotspots', 'Null-Sec', 'Other Notable']):
+                    legend_elements.append(handle)
+        
+        # Create combined legend
+        if legend_elements:
+            # Split into two columns if we have many elements
+            ncol = 2 if len(legend_elements) > 8 else 1
+            legend = ax.legend(handles=legend_elements, bbox_to_anchor=(1.05, 1), 
+                             loc='upper left', fontsize=9, ncol=ncol,
+                             title='Spectral Types & Famous Systems')
+            legend.get_title().set_fontsize(11)
         else:
             ax.legend(fontsize=10)
             
+        # Add strategic systems if available
+        self._add_strategic_systems(ax, df)
+        
         # Add some reference points if we can identify them
         self._add_reference_stars(ax, df)
         
-        # Add statistics text box
-        self._add_statistics_box(ax, df)
+        # Add statistics text box (updated to include famous systems info)
+        self._add_statistics_box(ax, df, famous_systems)
         
+    def _add_strategic_systems(self, ax, df: pd.DataFrame):
+        """Add highlighting for strategic EVE Online systems"""
+        
+        # Check if we have strategic systems data
+        strategic_stars = df[df.get('is_strategic', False) == True] if 'is_strategic' in df.columns else pd.DataFrame()
+        
+        if strategic_stars.empty:
+            logger.info("No strategic systems data found for highlighting")
+            return
+            
+        logger.info(f"Highlighting {len(strategic_stars)} strategic systems on HR diagram")
+        
+        # Plot strategic systems with distinctive markers
+        ax.scatter(
+            strategic_stars['temperature'], 
+            strategic_stars['luminosity'],
+            c=self.config['strategic_color'],
+            alpha=self.config['strategic_alpha'],
+            s=self.config['strategic_marker_size'],
+            edgecolors=self.config['strategic_edge_color'],
+            linewidth=self.config['strategic_edge_width'],
+            marker='*',  # Star shape for strategic systems
+            label=f'Strategic Systems ({len(strategic_stars)})',
+            zorder=10  # Ensure they appear on top
+        )
+        
+        # Add labels for each strategic system
+        for _, star in strategic_stars.iterrows():
+            if 'strategic_system_name' in star:
+                # Position label slightly offset from the star
+                ax.annotate(
+                    star['strategic_system_name'], 
+                    xy=(star['temperature'], star['luminosity']),
+                    xytext=(8, 8), 
+                    textcoords='offset points',
+                    fontsize=8,
+                    fontweight='bold',
+                    color='darkred',
+                    bbox=dict(
+                        boxstyle='round,pad=0.2', 
+                        facecolor='white', 
+                        alpha=0.8,
+                        edgecolor='darkred',
+                        linewidth=1
+                    ),
+                    arrowprops=dict(
+                        arrowstyle='->', 
+                        connectionstyle='arc3,rad=0.1',
+                        color='darkred',
+                        lw=1
+                    ),
+                    zorder=11
+                )
+                
+        # Update legend to include strategic systems
+        handles, labels = ax.get_legend_handles_labels()
+        if handles:  # Only update if there are existing legend items
+            ax.legend(handles, labels, bbox_to_anchor=(1.05, 1), loc='upper left', 
+                     fontsize=10, title='Spectral Type & Strategic Systems')
+
     def _add_reference_stars(self, ax, df: pd.DataFrame):
         """Add annotations for notable stars if identifiable"""
         
@@ -205,7 +385,7 @@ class HRDiagramGenerator:
                            bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7),
                            arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
                            
-    def _add_statistics_box(self, ax, df: pd.DataFrame):
+    def _add_statistics_box(self, ax, df: pd.DataFrame, famous_systems: Dict = None):
         """Add a statistics box to the plot"""
         
         stats_text = f"Total Stars: {len(df):,}\n"
@@ -224,6 +404,12 @@ class HRDiagramGenerator:
         # Luminosity range
         lum_range = df['luminosity'].max() / df['luminosity'].min()
         stats_text += f"\nLum Range: {lum_range:.1e}×"
+        
+        # Add famous systems info if available
+        if famous_systems:
+            successful_systems = sum(1 for v in famous_systems.values() if v is not None)
+            total_systems = len(famous_systems)
+            stats_text += f"\n\nFamous Systems: {successful_systems}/{total_systems}"
         
         # Add the text box
         ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, 

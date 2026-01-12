@@ -59,6 +59,27 @@ WORMHOLE_REGION_IDS = {
     11000031,  # C-R00031
 }
 
+# Strategic Systems Configuration
+# These are important systems in EVE Online that should be highlighted on the HR diagram
+STRATEGIC_SYSTEMS = [
+    "Auga",      # Minmatar/Amarr border system
+    "Amamake",   # Low-sec PvP hotspot
+    "Ahbazon",   # Amarr region system
+    "Tama",      # Famous PvP system
+    "Jita",      # Major trade hub
+    "Amarr",     # Amarr Empire capital
+    "Sosala",    # Amarr region system
+    "Vard",      # Minmatar region system
+    "Dodixie",   # Gallente trade hub
+    "Rens",      # Minmatar trade hub
+    "Hek",       # Minmatar trade hub
+    "1DQ1-A",    # Goonswarm Federation capital
+    "R-6KYM",    # Null-sec system
+    "Udema",     # High-sec system
+    "Rancer",    # Low-sec PvP system
+    "Mehatoor",  # Amarr region system
+]
+
 # H-R Diagram configuration
 HR_DIAGRAM_CONFIG = {
     "figsize": (12, 8),
@@ -70,6 +91,12 @@ HR_DIAGRAM_CONFIG = {
     "invert_x": True,  # H-R diagrams traditionally have temperature decreasing left to right
     "alpha": 0.6,
     "marker_size": 20,
+    # Strategic systems highlighting configuration
+    "strategic_marker_size": 80,
+    "strategic_alpha": 0.9,
+    "strategic_color": "#FF6B6B",  # Bright red for visibility
+    "strategic_edge_color": "#000000",  # Black border
+    "strategic_edge_width": 2,
 }
 
 def get_config() -> Dict[str, Any]:
@@ -84,5 +111,6 @@ def get_config() -> Dict[str, Any]:
         "data_dir": DATA_DIR,
         "output_dir": OUTPUT_DIR,
         "wormhole_region_ids": WORMHOLE_REGION_IDS,
+        "strategic_systems": STRATEGIC_SYSTEMS,
         "hr_diagram_config": HR_DIAGRAM_CONFIG,
     }
