@@ -309,7 +309,7 @@ class HRDiagramGenerator:
         """Add highlighting for strategic EVE Online systems"""
         
         # Check if we have strategic systems data
-        strategic_stars = df[df.get('is_strategic', False) == True] if 'is_strategic' in df.columns else pd.DataFrame()
+        strategic_stars = df[df['is_strategic'] == True] if 'is_strategic' in df.columns else pd.DataFrame()
         
         if strategic_stars.empty:
             logger.info("No strategic systems data found for highlighting")
@@ -326,35 +326,35 @@ class HRDiagramGenerator:
             s=self.config['strategic_marker_size'],
             edgecolors=self.config['strategic_edge_color'],
             linewidth=self.config['strategic_edge_width'],
-            marker='*',  # Star shape for strategic systems
+            marker='x',  # X shape for strategic systems as requested
             label=f'Strategic Systems ({len(strategic_stars)})',
             zorder=10  # Ensure they appear on top
         )
         
         # Add labels for each strategic system
         for _, star in strategic_stars.iterrows():
-            if 'strategic_system_name' in star:
+            if 'strategic_system_name' in star and pd.notna(star['strategic_system_name']):
                 # Position label slightly offset from the star
                 ax.annotate(
                     star['strategic_system_name'], 
                     xy=(star['temperature'], star['luminosity']),
-                    xytext=(8, 8), 
+                    xytext=(12, 12), 
                     textcoords='offset points',
-                    fontsize=8,
+                    fontsize=9,
                     fontweight='bold',
-                    color='darkred',
+                    color='black',
                     bbox=dict(
-                        boxstyle='round,pad=0.2', 
-                        facecolor='white', 
-                        alpha=0.8,
-                        edgecolor='darkred',
-                        linewidth=1
+                        boxstyle='round,pad=0.3', 
+                        facecolor='yellow', 
+                        alpha=0.9,
+                        edgecolor='black',
+                        linewidth=1.5
                     ),
                     arrowprops=dict(
                         arrowstyle='->', 
-                        connectionstyle='arc3,rad=0.1',
-                        color='darkred',
-                        lw=1
+                        connectionstyle='arc3,rad=0.2',
+                        color='black',
+                        lw=1.5
                     ),
                     zorder=11
                 )
