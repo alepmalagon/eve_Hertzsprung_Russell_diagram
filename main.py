@@ -11,8 +11,10 @@ import json
 import logging
 import argparse
 import sys
+import time
 from pathlib import Path
 from typing import Dict, List
+from tqdm import tqdm
 
 from src.esi_client import ESIClient
 from src.data_processor import StellarDataProcessor
@@ -39,57 +41,64 @@ async def collect_stellar_data(use_cache: bool = True, cache_file: str = "data/s
     
     # Try to load from cache first
     if use_cache and cache_path.exists():
-        logger.info(f"Loading stellar data from cache: {cache_file}")
-        try:
-            with open(cache_path, 'r') as f:
-                stellar_data = json.load(f)
-            logger.info(f"Loaded {len(stellar_data)} stars from cache")
-            return stellar_data
-        except Exception as e:
-            logger.warning(f"Failed to load cache: {e}. Fetching fresh data...")
+        print("📂 Loading stellar data from cache...")
+        with tqdm(desc="Loading cache", unit="MB") as pbar:
+            try:
+                with open(cache_path, 'r') as f:
+                    stellar_data = json.load(f)
+                pbar.update(1)
+                print(f"✅ Loaded {len(stellar_data):,} stars from cache")
+                return stellar_data
+            except Exception as e:
+                print(f"⚠️  Failed to load cache: {e}. Fetching fresh data...")
     
     # Fetch fresh data from ESI
-    logger.info("Fetching stellar data from ESI API...")
+    print("🚀 Fetching stellar data from ESI API...")
+    start_time = time.time()
     
     async with ESIClient() as client:
         # Get all solar systems in New Eden (excluding wormhole space)
-        logger.info("Discovering solar systems in New Eden...")
+        print("🔍 Discovering solar systems in New Eden...")
         system_ids = await client.get_all_systems(exclude_wormhole_regions=True)
         
         if not system_ids:
-            logger.error("No solar systems found!")
+            print("❌ No solar systems found!")
             return []
             
-        logger.info(f"Found {len(system_ids)} solar systems")
+        print(f"✅ Found {len(system_ids):,} solar systems")
         
         # Get star IDs from systems
-        logger.info("Extracting star IDs from solar systems...")
+        print("⭐ Extracting star IDs from solar systems...")
         star_ids = await client.get_stars_from_systems(system_ids)
         
         if not star_ids:
-            logger.error("No stars found!")
+            print("❌ No stars found!")
             return []
             
-        logger.info(f"Found {len(star_ids)} stars")
+        print(f"✅ Found {len(star_ids):,} stars")
         
         # Get stellar data
-        logger.info("Fetching stellar data...")
+        print("🌟 Fetching stellar data...")
         stellar_data = await client.get_stellar_data(star_ids)
         
         if not stellar_data:
-            logger.error("No stellar data retrieved!")
+            print("❌ No stellar data retrieved!")
             return []
             
-        logger.info(f"Successfully retrieved data for {len(stellar_data)} stars")
+        elapsed_time = time.time() - start_time
+        print(f"✅ Successfully retrieved data for {len(stellar_data):,} stars in {elapsed_time:.1f}s")
     
     # Save to cache
     cache_path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        with open(cache_path, 'w') as f:
-            json.dump(stellar_data, f, indent=2)
-        logger.info(f"Saved stellar data to cache: {cache_file}")
-    except Exception as e:
-        logger.warning(f"Failed to save cache: {e}")
+    print("💾 Saving data to cache...")
+    with tqdm(desc="Saving cache", unit="MB") as pbar:
+        try:
+            with open(cache_path, 'w') as f:
+                json.dump(stellar_data, f, indent=2)
+            pbar.update(1)
+            print(f"✅ Saved stellar data to cache: {cache_file}")
+        except Exception as e:
+            print(f"⚠️  Failed to save cache: {e}")
     
     return stellar_data
 
@@ -97,31 +106,40 @@ async def collect_stellar_data(use_cache: bool = True, cache_file: str = "data/s
 def process_and_analyze_data(stellar_data: List[Dict]) -> Dict:
     """Process stellar data and generate analysis"""
     
-    logger.info("Processing stellar data...")
+    print("🔬 Processing stellar data...")
     
     # Initialize processor
     processor = StellarDataProcessor()
     
-    # Process the data
-    df = processor.process_stellar_data(stellar_data)
+    # Process the data with progress bar
+    with tqdm(total=4, desc="Processing steps") as pbar:
+        pbar.set_description("🧹 Cleaning data")
+        df = processor.process_stellar_data(stellar_data)
+        pbar.update(1)
+        
+        if df.empty:
+            print("❌ No valid stellar data after processing!")
+            return {}
+        
+        pbar.set_description("📊 Generating statistics")
+        stats = processor.get_summary_statistics(df)
+        pbar.update(1)
+        
+        pbar.set_description("🎯 Filtering for H-R diagram")
+        hr_df = processor.filter_for_hr_diagram(df)
+        pbar.update(1)
+        
+        pbar.set_description("✅ Processing complete")
+        pbar.update(1)
     
-    if df.empty:
-        logger.error("No valid stellar data after processing!")
-        return {}
+    print(f"✅ Processed {len(df):,} stars ({len(hr_df):,} suitable for H-R diagram)")
     
-    # Generate summary statistics
-    stats = processor.get_summary_statistics(df)
-    logger.info("Summary statistics:")
-    for key, value in stats.items():
-        if isinstance(value, dict):
-            logger.info(f"  {key}:")
-            for subkey, subvalue in value.items():
-                logger.info(f"    {subkey}: {subvalue}")
-        else:
-            logger.info(f"  {key}: {value}")
-    
-    # Filter for H-R diagram
-    hr_df = processor.filter_for_hr_diagram(df)
+    # Display key statistics
+    if 'spectral_type_distribution' in stats:
+        print("📈 Most common spectral types:")
+        for spec_type, count in list(stats['spectral_type_distribution'].items())[:5]:
+            percentage = count / len(df) * 100
+            print(f"   {spec_type}: {count:,} stars ({percentage:.1f}%)")
     
     return {
         'processed_data': df,
@@ -133,28 +151,34 @@ def process_and_analyze_data(stellar_data: List[Dict]) -> Dict:
 def generate_visualizations(processed_data: Dict, output_dir: str = "output") -> Dict[str, str]:
     """Generate H-R diagram and additional visualizations"""
     
-    logger.info("Generating visualizations...")
+    print("🎨 Generating visualizations...")
     
     hr_data = processed_data['hr_data']
     
     if hr_data.empty:
-        logger.error("No data available for H-R diagram!")
+        print("❌ No data available for H-R diagram!")
         return {}
     
     # Initialize diagram generator
     generator = HRDiagramGenerator()
     
-    # Create main H-R diagram
-    hr_diagram_path = generator.create_hr_diagram(hr_data)
-    
-    # Create additional analysis plots
-    analysis_plots = generator.create_detailed_analysis(hr_data, output_dir)
+    # Create visualizations with progress tracking
+    with tqdm(total=5, desc="Creating plots") as pbar:
+        pbar.set_description("📈 Creating H-R diagram")
+        hr_diagram_path = generator.create_hr_diagram(hr_data)
+        pbar.update(1)
+        
+        pbar.set_description("📊 Creating analysis plots")
+        analysis_plots = generator.create_detailed_analysis(hr_data, output_dir)
+        pbar.update(4)  # Analysis creates multiple plots
     
     # Combine all output files
     output_files = {
         'hr_diagram': hr_diagram_path,
         **analysis_plots
     }
+    
+    print(f"✅ Generated {len(output_files)} visualization files")
     
     return output_files
 
@@ -232,51 +256,86 @@ async def main():
     
     args = parser.parse_args()
     
-    logger.info("Starting EVE Online H-R Diagram Generation")
-    logger.info(f"Configuration: {get_config()}")
+    # Print header
+    print("=" * 60)
+    print("🌟 EVE Online Hertzsprung-Russell Diagram Generator 🌟")
+    print("=" * 60)
+    print()
+    
+    start_time = time.time()
     
     try:
         # Step 1: Collect stellar data
+        print("📡 STEP 1: Collecting Stellar Data")
+        print("-" * 40)
         stellar_data = await collect_stellar_data(
             use_cache=not args.no_cache,
             cache_file=args.cache_file
         )
         
         if not stellar_data:
-            logger.error("No stellar data available. Exiting.")
+            print("❌ No stellar data available. Exiting.")
             return 1
         
         # Limit sample size if requested (for testing)
         if args.sample_size and args.sample_size < len(stellar_data):
-            logger.info(f"Limiting to {args.sample_size} stars for testing")
+            print(f"🔬 Limiting to {args.sample_size:,} stars for testing")
             stellar_data = stellar_data[:args.sample_size]
         
+        print()
+        
         # Step 2: Process and analyze data
+        print("🔬 STEP 2: Processing and Analyzing Data")
+        print("-" * 40)
         processed_data = process_and_analyze_data(stellar_data)
         
         if not processed_data:
-            logger.error("Data processing failed. Exiting.")
+            print("❌ Data processing failed. Exiting.")
             return 1
         
+        print()
+        
         # Step 3: Generate visualizations
+        print("🎨 STEP 3: Generating Visualizations")
+        print("-" * 40)
         output_files = generate_visualizations(processed_data, args.output_dir)
         
         if not output_files:
-            logger.error("Visualization generation failed. Exiting.")
+            print("❌ Visualization generation failed. Exiting.")
             return 1
         
+        print()
+        
         # Step 4: Save results
-        save_results(processed_data, output_files, args.output_dir)
+        print("💾 STEP 4: Saving Results")
+        print("-" * 40)
+        with tqdm(desc="Saving results", total=2) as pbar:
+            save_results(processed_data, output_files, args.output_dir)
+            pbar.update(2)
         
         # Success!
-        logger.info("H-R Diagram generation completed successfully!")
-        logger.info("Generated files:")
+        total_time = time.time() - start_time
+        print()
+        print("🎉 SUCCESS! H-R Diagram generation completed!")
+        print("=" * 60)
+        print(f"⏱️  Total execution time: {total_time:.1f} seconds")
+        print(f"📊 Processed {len(processed_data['processed_data']):,} stars")
+        print(f"📈 Generated {len(output_files)} visualization files:")
+        
         for name, path in output_files.items():
-            logger.info(f"  {name}: {path}")
+            print(f"   📄 {name}: {path}")
+        
+        print()
+        print("🌟 Your New Eden Hertzsprung-Russell diagram is ready!")
+        print("=" * 60)
         
         return 0
         
+    except KeyboardInterrupt:
+        print("\n⚠️  Operation cancelled by user")
+        return 1
     except Exception as e:
+        print(f"\n❌ Unexpected error: {e}")
         logger.error(f"Unexpected error: {e}", exc_info=True)
         return 1
 

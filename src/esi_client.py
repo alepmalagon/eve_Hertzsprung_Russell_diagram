@@ -9,6 +9,7 @@ import logging
 from typing import Dict, List, Optional, Any, Union
 from asyncio_throttle import Throttler
 from tqdm.asyncio import tqdm
+from tqdm import tqdm as sync_tqdm
 
 from .config import (
     ESI_BASE_URL, ESI_DATASOURCE, ESI_VERSION, ESI_RATE_LIMIT,
@@ -126,7 +127,7 @@ class ESIClient:
         for region_id in regions:
             constellation_tasks.append(self.get_region_info(region_id))
             
-        region_results = await tqdm.gather(*constellation_tasks, desc="Fetching regions")
+        region_results = await tqdm.gather(*constellation_tasks, desc="🌌 Fetching regions")
         
         # Collect all constellation IDs
         constellation_ids = []
@@ -141,7 +142,7 @@ class ESIClient:
         for constellation_id in constellation_ids:
             constellation_tasks.append(self.get_constellation_info(constellation_id))
             
-        constellation_results = await tqdm.gather(*constellation_tasks, desc="Fetching constellations")
+        constellation_results = await tqdm.gather(*constellation_tasks, desc="⭐ Fetching constellations")
         
         # Collect all system IDs
         for constellation_info in constellation_results:
@@ -159,7 +160,7 @@ class ESIClient:
         for system_id in system_ids:
             system_tasks.append(self.get_system_info(system_id))
             
-        system_results = await tqdm.gather(*system_tasks, desc="Fetching systems")
+        system_results = await tqdm.gather(*system_tasks, desc="🌍 Fetching solar systems")
         
         star_ids = []
         for system_info in system_results:
@@ -177,7 +178,7 @@ class ESIClient:
         for star_id in star_ids:
             star_tasks.append(self.get_star_info(star_id))
             
-        star_results = await tqdm.gather(*star_tasks, desc="Fetching stellar data")
+        star_results = await tqdm.gather(*star_tasks, desc="🌟 Fetching stellar data")
         
         # Filter out None results
         stellar_data = [star for star in star_results if star is not None]

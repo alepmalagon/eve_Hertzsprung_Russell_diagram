@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import logging
 from typing import List, Dict, Tuple, Optional
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -21,20 +22,14 @@ class StellarDataProcessor:
         
     def process_stellar_data(self, stellar_data: List[Dict]) -> pd.DataFrame:
         """Process raw stellar data into a clean DataFrame"""
-        logger.info(f"Processing {len(stellar_data)} stellar records...")
         
         # Convert to DataFrame
         df = pd.DataFrame(stellar_data)
-        
-        # Log initial data info
-        logger.info(f"Initial data shape: {df.shape}")
-        logger.info(f"Columns: {list(df.columns)}")
         
         # Clean and validate data
         df = self._clean_data(df)
         df = self._add_derived_columns(df)
         
-        logger.info(f"Final processed data shape: {df.shape}")
         return df
         
     def _clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
