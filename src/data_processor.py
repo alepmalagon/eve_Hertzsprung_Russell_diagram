@@ -35,7 +35,7 @@ class StellarDataProcessor:
     def _clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """Clean and validate stellar data"""
         initial_count = len(df)
-        logger.info(f"🔍 Starting data cleaning with {initial_count} stars")
+        logger.info(f"Starting data cleaning with {initial_count} stars")
         
         # Remove rows with missing critical data
         critical_columns = ['luminosity', 'temperature', 'spectral_class']
@@ -109,8 +109,8 @@ class StellarDataProcessor:
         cleaned_count = len(df)
         removed_count = initial_count - cleaned_count
         
-        logger.info(f"✅ Data cleaning complete: removed {removed_count} invalid records ({removed_count/initial_count*100:.1f}%)")
-        logger.info(f"📊 Remaining records: {cleaned_count}")
+        logger.info(f"Data cleaning complete: removed {removed_count} invalid records ({removed_count/initial_count*100:.1f}%)")
+        logger.info(f"Remaining records: {cleaned_count}")
         
         return df
         

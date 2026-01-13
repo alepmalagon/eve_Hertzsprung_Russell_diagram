@@ -21,14 +21,18 @@ from src.data_processor import StellarDataProcessor
 from src.hr_diagram import HRDiagramGenerator
 from src.config import get_config, STRATEGIC_SYSTEMS
 
-# Set up logging
+# Set up logging with UTF-8 encoding to handle Unicode characters
+# Configure stdout handler with UTF-8 encoding for Windows compatibility
+stdout_handler = logging.StreamHandler(sys.stdout)
+stdout_handler.setStream(sys.stdout)
+
+# Configure file handler with UTF-8 encoding
+file_handler = logging.FileHandler('eve_hr_diagram.log', encoding='utf-8')
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler('eve_hr_diagram.log')
-    ]
+    handlers=[stdout_handler, file_handler]
 )
 
 logger = logging.getLogger(__name__)
