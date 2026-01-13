@@ -321,10 +321,24 @@ async def main():
         print("-" * 40)
         strategic_data = await collect_strategic_systems_data()
         
-        # Merge strategic systems data with main stellar data
+        # Convert strategic data to famous_systems format for visualization
+        famous_systems = {}
         if strategic_data:
             print(f"🔗 Merging {len(strategic_data)} strategic systems with main dataset")
             stellar_data.extend(strategic_data)
+            
+            # Convert to famous_systems format
+            for star_data in strategic_data:
+                if 'strategic_system_name' in star_data:
+                    system_name = star_data['strategic_system_name']
+                    famous_systems[system_name] = {
+                        'stellar_data': star_data,
+                        'system_name': system_name
+                    }
+            
+            print(f"✅ Prepared {len(famous_systems)} strategic systems for visualization")
+        else:
+            famous_systems = None
         
         print()
         
